@@ -1,0 +1,62 @@
+name: hermes-kasm-workstation
+
+services:
+  tailscale:
+    image: tailscale/tailscale:stable
+    hostname: ${TS_HOSTNAME:-hermes-kasm}
+    restart: unless-stopped
+    cpus: ${TAILSCALE_CPU_LIMIT:-0.5}
+    mem_limit: ${TAILSCALE_MEMORY_LIMIT:-256m}
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_AUTH_ONCE: "true"
+      TS_USERSPACE: "false"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+    ports:
+      - "127.0.0.1:${KASM_PORT:-6901}:6901"
+      - "127.0.0.1:${WEBUI_PORT:-8788}:8787"
+      - "127.0.0.1:${CODE_SERVER_PORT:-8444}:8080"
+    networks:
+      - hermes-kasm-shared
+
+  kasm-hermes:
+    build:
+      context: .
+      args:
+        KASM_IMAGE: ${KASM_IMAGE:-kasmweb/ubuntu-noble-desktop:1.18.0}
+    image: hermes-kasm-workstation:local
+    restart: unless-stopped
+    cpus: ${KASM_CPU_LIMIT:-4.0}
+    mem_limit: ${KASM_MEMORY_LIMIT:-8g}
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
+    shm_size: 1gb
+    security_opt:
+      - seccomp=unconfined
+    environment:
+      VNC_PW: ${KASM_VNC_PASSWORD:?Set KASM_VNC_PASSWORD in .env}
+      HERMES_WEBUI_PASSWORD: ${HERMES_WEBUI_PASSWORD:?Set HERMES_WEBUI_PASSWORD in .env}
+      CODE_SERVER_PASSWORD: ${CODE_SERVER_PASSWORD:?Set CODE_SERVER_PASSWORD in .env}
+      HINDSIGHT_API_URL: ${HINDSIGHT_API_URL:-}
+      HINDSIGHT_API_KEY: ${HINDSIGHT_API_KEY:-}
+      TZ: ${TZ:-Asia/Karachi}
+    volumes:
+      - kasm-home:/home/kasm-user
+      - workspace-data:/workspace
+
+networks:
+  hermes-kasm-shared:
+    name: hermes-kasm-shared
+
+volumes:
+  kasm-home:
+  tailscale-state:
+  workspace-data:
