@@ -1,9 +1,10 @@
 # Hermes Kasm Workstation
 
 A browser-accessible Ubuntu desktop based on Kasm's Ubuntu Noble desktop
-image. Hermes Agent is installed manually during the image build, Hermes
-WebUI runs in the same Ubuntu container, and a separate Tailscale container
-provides tailnet access. Claude Code, Codex, OpenCode, Herder, Code Server,
+image. Hermes Agent is installed manually during the image build and Hermes
+WebUI runs in the same Ubuntu container. The default Compose file publishes
+ports to localhost for testing; `docker-compose.tailscale.yml` preserves the
+Tailscale sidecar variant. Claude Code, Codex, OpenCode, Herder, Code Server,
 `yt-dlp`/`youtube-dl`, ffmpeg, Monolith, Tesseract OCR, nano, git, jq, Python,
 and Node.js are included.
 
@@ -13,9 +14,9 @@ Agent Vault. Hermes' Hindsight provider can connect to your existing service.
 
 ## Start
 
-1. Copy `.env.example` to `.env` and set unique passwords for Kasm, Hermes
-   WebUI, and Code Server. Optionally provide `TS_AUTHKEY`; otherwise Tailscale
-   will show an interactive login URL.
+1. Copy `.env.example` to `.env` and set unique passwords for the Kasm VNC,
+   `kasm-user` sudo account, Hermes WebUI, and Code Server. The sudo password is
+   `KASM_USER_PASSWORD`; change it in `.env` before starting or redeploying.
 2. Build and launch:
 
    ```sh
@@ -26,15 +27,21 @@ Agent Vault. Hermes' Hindsight provider can connect to your existing service.
    certificate is self-signed). Sign in as `kasm_user` using
    `KASM_VNC_PASSWORD`. Hermes WebUI is at `http://localhost:8788`; Code Server
    is at `http://localhost:8444`.
-4. For Tailscale login without an auth key, follow the URL from:
+   In the desktop terminal, use `sudo` with `KASM_USER_PASSWORD`. The startup
+   helper grants `kasm-user` membership in Ubuntu's `sudo` group and sets that
+   account password from the Compose environment, then drops privileges before
+   launching Kasm. The password is reapplied whenever the container starts, so
+   update the environment variable to change it.
+4. To restore Tailscale access, use the alternate Compose file:
 
    ```sh
-   docker compose logs -f tailscale
+   docker compose -f docker-compose.tailscale.yml up -d --build
    ```
 
+   Without an auth key, get the interactive login URL with
+   `docker compose -f docker-compose.tailscale.yml logs -f tailscale`.
    Tailnet access is through `<TS_HOSTNAME>:6901` for the desktop,
-   `<TS_HOSTNAME>:8787` for Hermes WebUI, and `<TS_HOSTNAME>:8080` for Code
-   Server. Use your tailnet access policy to limit who can reach the node.
+   `<TS_HOSTNAME>:8787` for Hermes WebUI, and `<TS_HOSTNAME>:8080` for Code Server.
 
 The sidecar uses Tailscale kernel networking and `/dev/net/tun`. Linux Docker
 is required for this mode. Docker Desktop on Windows/macOS can impose
@@ -46,14 +53,13 @@ with the other Hermes projects in this workspace; change `WEBUI_PORT` or
 
 This stack is portable to Coolify as a **Git-based Docker Compose Application**.
 Push this project folder to a Git repository with the Dockerfile,
-`custom_startup.sh`, and `docker-compose.yml`, then point Coolify at the
+`custom_startup.sh`, `kasm-user-init.sh`, and `docker-compose.yml`, then point Coolify at the
 Compose file. A pasted Compose definition alone is insufficient because
 Coolify also needs the Docker build context files.
 
 Add the variables from `.env.example` in Coolify's Environment Variables and
-set fresh passwords and, optionally, a Tailscale auth key. The Compose file
-keeps Kasm and Tailscale CPU/RAM limits, named persistent volumes, and
-loopback-only host port bindings. `kasm-home`, `tailscale-state`, and
+set fresh passwords. Choose `docker-compose.tailscale.yml` for Tailscale; the
+default Compose file is for local testing. `kasm-home`, `tailscale-state`, and
 `workspace-data` persist Hermes configuration, Tailscale identity, and project
 files across redeploys.
 
@@ -86,10 +92,9 @@ filesystem for a hard disk cap.
 
 ## Hindsight and memory
 
-No Hindsight service or local memory database is included. Hermes and the
-WebUI run in the Kasm container, which shares the `hermes-kasm-shared` Docker
-network with Tailscale. Connect an existing Hindsight container on this Docker
-host to that network:
+No Hindsight service or local memory database is included. With the Tailscale
+Compose variant, Hermes and the WebUI share the `hermes-kasm-shared` Docker
+network. Connect an existing Hindsight container on this Docker host to that network:
 
 ```sh
 docker network connect hermes-kasm-shared <hindsight-container-name>
@@ -126,7 +131,10 @@ service's Compose file rather than relying on the one-time network command.
 ## Data and updates
 
 The `kasm-home` volume stores the Kasm user profile, Hermes configuration and
-sessions, WebUI state, and CLI logins. `workspace-data` is available in the
+sessions, WebUI state, and CLI logins. `hermes-runtime` stores the Hermes
+install and managed dependency environments at the path Hermes records during
+the image build; keeping that install on a writable volume lets Hermes repair
+or update its dependencies at runtime. `workspace-data` is available in the
 desktop, WebUI, Code Server, and CLI tools. `tailscale-state` keeps the
 Tailscale device identity between restarts. Back up these volumes before
 upgrades.
@@ -139,9 +147,12 @@ docker compose build --pull
 docker compose up -d
 ```
 
-The Hermes and WebUI versions are installed together at image-build time. This
-tracks the versions available when you build; it does not perform unattended
-updates inside a running desktop.
+Hermes is pinned to the verified commit in `HERMES_COMMIT` in the Dockerfile;
+update that value deliberately when moving to a newer Hermes commit. The WebUI
+checkout and other tools are fetched during image builds. This does not perform
+unattended updates inside a running desktop. A newer Hermes main revision failed
+its frontend TypeScript build during verification, so the known-good commit is
+kept until that upstream build succeeds.
 
 ## How it is assembled
 
@@ -152,6 +163,5 @@ updates inside a running desktop.
 - `custom_startup.sh` starts Hermes WebUI and Code Server for each desktop
   session. WebUI operates Hermes in-process; a separate Hermes gateway is not
   required for interactive WebUI chat.
-- `docker-compose.yml` runs the Tailscale sidecar separately and shares its
-  network namespace with the Kasm desktop. The Tailscale state persists in a
-  named volume.
+- `docker-compose.yml` publishes the services to localhost for testing.
+- `docker-compose.tailscale.yml` preserves the Tailscale sidecar deployment.
