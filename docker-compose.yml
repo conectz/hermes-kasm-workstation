@@ -30,7 +30,7 @@ services:
     build:
       context: .
       args:
-        KASM_IMAGE: ${KASM_IMAGE:-kasmweb/ubuntu-noble-desktop:1.18.0}
+        KASM_IMAGE: ${KASM_IMAGE:-kasmweb/ubuntu-noble-desktop:1.18.0@sha256:6e9274c5881bd2b5863cbaef754433be4d0a832d871a1fe52c995cb26f823501}
     image: hermes-kasm-workstation:local
     restart: unless-stopped
     cpus: ${KASM_CPU_LIMIT:-4.0}

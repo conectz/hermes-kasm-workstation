@@ -1,4 +1,4 @@
-ARG KASM_IMAGE=kasmweb/ubuntu-noble-desktop:1.18.0
+ARG KASM_IMAGE=kasmweb/ubuntu-noble-desktop:1.18.0@sha256:6e9274c5881bd2b5863cbaef754433be4d0a832d871a1fe52c995cb26f823501
 FROM ${KASM_IMAGE}
 
 USER root
@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install the supported Node.js 24 LTS line; Ubuntu Noble's default Node 18
 # does not satisfy current Claude Code CLI requirements.
+ARG MONOLITH_VERSION=2.10.1
 RUN set -eu; \
     curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource_setup.sh; \
     bash /tmp/nodesource_setup.sh; \
@@ -41,7 +42,7 @@ RUN set -eu; \
       arm64) monolith_arch=aarch64 ;; \
       *) echo "Unsupported architecture for Monolith" >&2; exit 1 ;; \
     esac; \
-    curl -fsSL "https://github.com/Y2Z/monolith/releases/latest/download/monolith-gnu-linux-${monolith_arch}" \
+    curl -fsSL "https://github.com/Y2Z/monolith/releases/download/v${MONOLITH_VERSION}/monolith-gnu-linux-${monolith_arch}" \
       -o /usr/local/bin/monolith; \
     chmod 0755 /usr/local/bin/monolith
 
